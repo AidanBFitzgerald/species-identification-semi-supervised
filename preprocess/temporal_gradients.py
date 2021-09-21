@@ -79,9 +79,8 @@ def temporal_gradient(frame_current, frame_next):
     Normalizes difference between 0 - 1
     """
     movement = np.subtract(frame_current, frame_next)
-    # Min-max normalize movement for each channel
+    # Normalize movement for each channel
     movement = (movement + 1) / 2
-    plt.imgshow(movement)
     return movement
 
 
@@ -147,6 +146,7 @@ def main(input_file, output_dir):
                 except:
                     # Use final frame movement if next frame is missing
                     clips_movement[processed, 44] = clips_movement[processed, 43]
+                    clips_movement = np.flip(clips_movement, 3)
 
                 processed += 1
                 if processed % 100 == 0:
