@@ -1,18 +1,14 @@
-from keras.optimizers import Adam, SGD
+import warnings
+
+from tensorflow.keras.optimizers import Adam, SGD
 from keras.models import Sequential, Model
 from keras import layers
 from keras.layers import *
-from keras.utils import Sequence
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau, CSVLogger, ModelCheckpoint
-from keras.engine.topology import get_source_inputs
 from keras.utils import layer_utils
 from keras import backend as K
 from keras.utils.data_utils import get_file
 import numpy as np
-from sklearn.metrics import classification_report, confusion_matrix
 import os
-import datetime
-from matplotlib import pyplot as plt
 import tensorflow as tf
 import random as python_random
 
@@ -23,21 +19,20 @@ tf.random.set_seed(7654)
 
 WEIGHTS_NAME = ['rgb_kinetics_only', 'flow_kinetics_only', 'rgb_imagenet_and_kinetics', 'flow_imagenet_and_kinetics']
 
-
 # path to pretrained models with top (classification layer)
 WEIGHTS_PATH = {
-    'rgb_kinetics_only' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels.h5',
-    'flow_kinetics_only' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels.h5',
-    'rgb_imagenet_and_kinetics' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels.h5',
-    'flow_imagenet_and_kinetics' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels.h5'
+    'rgb_kinetics_only': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels.h5',
+    'flow_kinetics_only': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels.h5',
+    'rgb_imagenet_and_kinetics': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels.h5',
+    'flow_imagenet_and_kinetics': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels.h5'
 }
 
 # path to pretrained models with no top (no classification layer)
 WEIGHTS_PATH_NO_TOP = {
-    'rgb_kinetics_only' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels_no_top.h5',
-    'flow_kinetics_only' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels_no_top.h5',
-    'rgb_imagenet_and_kinetics' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels_no_top.h5',
-    'flow_imagenet_and_kinetics' : 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels_no_top.h5'
+    'rgb_kinetics_only': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels_no_top.h5',
+    'flow_kinetics_only': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_kinetics_only_tf_dim_ordering_tf_kernels_no_top.h5',
+    'rgb_imagenet_and_kinetics': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/rgb_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels_no_top.h5',
+    'flow_imagenet_and_kinetics': 'https://github.com/dlpbc/keras-kinetics-i3d/releases/download/v0.2/flow_inception_i3d_imagenet_and_kinetics_tf_dim_ordering_tf_kernels_no_top.h5'
 }
 
 
@@ -113,13 +108,14 @@ def _obtain_input_shape(input_shape,
                 if input_shape[1] is not None and input_shape[1] < min_num_frames:
                     raise ValueError('Input number of frames must be at least ' +
                                      str(min_num_frames) + '; got '
-                                     '`input_shape=' + str(input_shape) + '`')
+                                                           '`input_shape=' + str(input_shape) + '`')
 
                 if ((input_shape[2] is not None and input_shape[2] < min_frame_size) or
-                   (input_shape[3] is not None and input_shape[3] < min_frame_size)):
+                        (input_shape[3] is not None and input_shape[3] < min_frame_size)):
                     raise ValueError('Input size must be at least ' +
                                      str(min_frame_size) + 'x' + str(min_frame_size) + '; got '
-                                     '`input_shape=' + str(input_shape) + '`')
+                                                                                       '`input_shape=' + str(
+                        input_shape) + '`')
         else:
             if input_shape is not None:
                 if len(input_shape) != 4:
@@ -132,13 +128,14 @@ def _obtain_input_shape(input_shape,
                 if input_shape[0] is not None and input_shape[0] < min_num_frames:
                     raise ValueError('Input number of frames must be at least ' +
                                      str(min_num_frames) + '; got '
-                                     '`input_shape=' + str(input_shape) + '`')
+                                                           '`input_shape=' + str(input_shape) + '`')
 
                 if ((input_shape[1] is not None and input_shape[1] < min_frame_size) or
-                   (input_shape[2] is not None and input_shape[2] < min_frame_size)):
+                        (input_shape[2] is not None and input_shape[2] < min_frame_size)):
                     raise ValueError('Input size must be at least ' +
                                      str(min_frame_size) + 'x' + str(min_frame_size) + '; got '
-                                     '`input_shape=' + str(input_shape) + '`')
+                                                                                       '`input_shape=' + str(
+                        input_shape) + '`')
     else:
         if require_flatten:
             input_shape = default_shape
@@ -162,9 +159,9 @@ def conv3d_bn(x,
               num_col,
               padding='same',
               strides=(1, 1, 1),
-              use_bias = False,
-              use_activation_fn = True,
-              use_bn = True,
+              use_bias=False,
+              use_activation_fn=True,
+              use_bn=True,
               name=None):
     """Utility function to apply conv3d + BN.
     # Arguments
@@ -175,7 +172,7 @@ def conv3d_bn(x,
         num_col: width of the convolution kernel.
         padding: padding mode in `Conv3D`.
         strides: strides in `Conv3D`.
-        use_bias: use bias or not  
+        use_bias: use bias or not
         use_activation_fn: use an activation function or not.
         use_bn: use batch normalization or not.
         name: name of the ops; will become `name + '_conv'`
@@ -212,12 +209,12 @@ def conv3d_bn(x,
 
 
 def Inception_Inflated3d(include_top=True,
-                weights=None,
-                input_tensor=None,
-                input_shape=None,
-                dropout_prob=0.0,
-                endpoint_logit=True,
-                classes=400):
+                         weights=None,
+                         input_tensor=None,
+                         input_shape=None,
+                         dropout_prob=0.0,
+                         endpoint_logit=True,
+                         classes=400):
     """Instantiates the Inflated 3D Inception v1 architecture.
     Optionally loads weights pre-trained
     on Kinetics. Note that when using TensorFlow,
@@ -230,7 +227,7 @@ def Inception_Inflated3d(include_top=True,
     specified in your Keras config file.
     Note that the default input frame(image) size for this model is 224x224.
     # Arguments
-        include_top: whether to include the the classification 
+        include_top: whether to include the the classification
             layer at the top of the network.
         weights: one of `None` (random initialization)
             or 'kinetics_only' (pre-training on Kinetics dataset only).
@@ -247,13 +244,13 @@ def Inception_Inflated3d(include_top=True,
             Also, Width and height should be no smaller than 32.
             E.g. `(64, 150, 150, 3)` would be one valid value.
         dropout_prob: optional, dropout probability applied in dropout layer
-            after global average pooling layer. 
+            after global average pooling layer.
             0.0 means no dropout is applied, 1.0 means dropout is applied to all features.
             Note: Since Dropout is applied just before the classification
             layer, it is only useful when `include_top` is set to True.
         endpoint_logit: (boolean) optional. If True, the model's forward pass
             will end at producing logits. Otherwise, softmax is applied after producing
-            the logits to produce the class probabilities prediction. Setting this parameter 
+            the logits to produce the class probabilities prediction. Setting this parameter
             to True is particularly useful when you want to combine results of rgb model
             and optical flow model.
             - `True` end model forward pass at logit output
@@ -270,9 +267,9 @@ def Inception_Inflated3d(include_top=True,
     """
     if not (weights in WEIGHTS_NAME or weights is None or os.path.exists(weights)):
         raise ValueError('The `weights` argument should be either '
-                         '`None` (random initialization) or %s' % 
-                         str(WEIGHTS_NAME) + ' ' 
-                         'or a valid path to a file containing `weights` values')
+                         '`None` (random initialization) or %s' %
+                         str(WEIGHTS_NAME) + ' '
+                                             'or a valid path to a file containing `weights` values')
 
     if weights in WEIGHTS_NAME and include_top and classes != 400:
         raise ValueError('If using `weights` as one of these %s, with `include_top`'
@@ -281,8 +278,8 @@ def Inception_Inflated3d(include_top=True,
     # Determine proper input shape
     input_shape = _obtain_input_shape(
         input_shape,
-        default_frame_size=224, 
-        min_frame_size=32, 
+        default_frame_size=224,
+        min_frame_size=32,
         default_num_frames=64,
         min_num_frames=8,
         data_format=K.image_data_format(),
@@ -346,7 +343,6 @@ def Inception_Inflated3d(include_top=True,
         [branch_0, branch_1, branch_2, branch_3],
         axis=channel_axis,
         name='Mixed_3c')
-
 
     # Downsampling (spatial and temporal)
     x = MaxPooling3D((3, 3, 3), strides=(2, 2, 2), padding='same', name='MaxPool2d_4a_3x3')(x)
@@ -436,7 +432,6 @@ def Inception_Inflated3d(include_top=True,
         axis=channel_axis,
         name='Mixed_4f')
 
-
     # Downsampling (spatial and temporal)
     x = MaxPooling3D((2, 2, 2), strides=(2, 2, 2), padding='same', name='MaxPool2d_5a_2x2')(x)
 
@@ -479,9 +474,9 @@ def Inception_Inflated3d(include_top=True,
         x = AveragePooling3D((2, 7, 7), strides=(1, 1, 1), padding='valid', name='global_avg_pool')(x)
         x = Dropout(dropout_prob)(x)
 
-        x = conv3d_bn(x, classes, 1, 1, 1, padding='same', 
-                use_bias=True, use_activation_fn=False, use_bn=False, name='Conv3d_6a_1x1')
- 
+        x = conv3d_bn(x, classes, 1, 1, 1, padding='same',
+                      use_bias=True, use_activation_fn=False, use_bn=False, name='Conv3d_6a_1x1')
+
         num_frames_remaining = int(x.shape[1])
         x = Reshape((num_frames_remaining, classes))(x)
 
@@ -496,15 +491,13 @@ def Inception_Inflated3d(include_top=True,
         w = int(x.shape[3])
         x = AveragePooling3D((2, h, w), strides=(1, 1, 1), padding='valid', name='global_avg_pool')(x)
 
-
-
     inputs = img_input
     # create model
     model = Model(inputs, x, name='i3d_inception')
 
     # load weights
     if weights in WEIGHTS_NAME:
-        if weights == WEIGHTS_NAME[0]:   # rgb_kinetics_only
+        if weights == WEIGHTS_NAME[0]:  # rgb_kinetics_only
             if include_top:
                 weights_url = WEIGHTS_PATH['rgb_kinetics_only']
                 model_name = 'i3d_inception_rgb_kinetics_only.h5'
@@ -512,7 +505,7 @@ def Inception_Inflated3d(include_top=True,
                 weights_url = WEIGHTS_PATH_NO_TOP['rgb_kinetics_only']
                 model_name = 'i3d_inception_rgb_kinetics_only_no_top.h5'
 
-        elif weights == WEIGHTS_NAME[1]: # flow_kinetics_only
+        elif weights == WEIGHTS_NAME[1]:  # flow_kinetics_only
             if include_top:
                 weights_url = WEIGHTS_PATH['flow_kinetics_only']
                 model_name = 'i3d_inception_flow_kinetics_only.h5'
@@ -520,7 +513,7 @@ def Inception_Inflated3d(include_top=True,
                 weights_url = WEIGHTS_PATH_NO_TOP['flow_kinetics_only']
                 model_name = 'i3d_inception_flow_kinetics_only_no_top.h5'
 
-        elif weights == WEIGHTS_NAME[2]: # rgb_imagenet_and_kinetics
+        elif weights == WEIGHTS_NAME[2]:  # rgb_imagenet_and_kinetics
             if include_top:
                 weights_url = WEIGHTS_PATH['rgb_imagenet_and_kinetics']
                 model_name = 'i3d_inception_rgb_imagenet_and_kinetics.h5'
@@ -528,7 +521,7 @@ def Inception_Inflated3d(include_top=True,
                 weights_url = WEIGHTS_PATH_NO_TOP['rgb_imagenet_and_kinetics']
                 model_name = 'i3d_inception_rgb_imagenet_and_kinetics_no_top.h5'
 
-        elif weights == WEIGHTS_NAME[3]: # flow_imagenet_and_kinetics
+        elif weights == WEIGHTS_NAME[3]:  # flow_imagenet_and_kinetics
             if include_top:
                 weights_url = WEIGHTS_PATH['flow_imagenet_and_kinetics']
                 model_name = 'i3d_inception_flow_imagenet_and_kinetics.h5'
@@ -556,177 +549,3 @@ def Inception_Inflated3d(include_top=True,
         model.load_weights(weights)
 
     return model
-
-
-def load(name):
-    X = np.load("/home/cddt/data-space/COMPSCI760/cacophony-preprocessed" + name + ".npy")
-    y = np.load("/home/cddt/data-space/COMPSCI760/cacophony-preprocessed" + name + "-labels.npy")
-    y_one_hot_encoded = np.zeros([y.shape[0], np.unique(y).size])
-    y_one_hot_encoded[range(y.shape[0]), y] = 1
-    return X, y_one_hot_encoded
-
-
-
-print("Dataset loading..", end = " ")
-# Loading the preprocessed videos
-X_train, y_train = load("/training")
-X_val, y_val = load("/validation")
-X_test, y_test = load("/test")
-# Since Keras likes the channels last data format
-X_train = X_train.transpose(0,1,3,4,2)
-X_val = X_val.transpose(0,1,3,4,2)
-X_test = X_test.transpose(0,1,3,4,2)
-print("Dataset loaded!")
-
-MLP = Sequential()
-MLP.add(Flatten())
-MLP.add(Dropout(0.5))
-MLP.add(Dense(256, activation = "relu"))
-MLP.add(Dense(13, activation="softmax"))
-
-inputs = Input((45, 32, 32, 3))
-x = Inception_Inflated3d(include_top = False,
-                         weights = 'rgb_imagenet_and_kinetics',
-                         input_shape = (45, 32, 32, 3))(inputs)
-outputs = MLP(x)
-model = Model(inputs=inputs, outputs=outputs)
-
-
-class DataGenerator(Sequence):
-    def __init__(self, vids, mvm, labels, batch_size, flip = False, angle = 0, crop = 0, shift = 0, shuffle = True):
-        self.vids = vids
-        self.mvm = mvm
-        self.labels = labels
-        self.indices = np.arange(vids.shape[0])
-        self.batch_size = batch_size
-        self.flip = flip
-        self.angle = angle
-        self.crop = crop
-        self.shift = shift
-        self.shuffle = shuffle
-        self.on_epoch_end()
-
-    def __len__(self):
-        return len(self.indices) // self.batch_size
-
-    def random_zoom(self, batch, x, y):
-        ax = np.random.uniform(self.crop)
-        bx = np.random.uniform(ax)
-        ay = np.random.uniform(self.crop)
-        by = np.random.uniform(ay)
-        x = x*(1-ax/batch.shape[2]) + bx
-        y = y*(1-ay/batch.shape[3]) + by
-        return x, y
-
-    def random_rotate(self, batch, x, y):
-        rad = np.random.uniform(-self.angle, self.angle)/180*np.pi
-        rotm = np.array([[np.cos(rad),  np.sin(rad)],
-                         [-np.sin(rad), np.cos(rad)]])
-        xm, ym = x.mean(), y.mean()
-        x, y = np.einsum('ji, mni -> jmn', rotm, np.dstack([x-xm, y-ym]))
-        return x+xm, y+ym
-
-    def random_translate(self, batch, x, y):
-        xs = np.random.uniform(-self.shift, self.shift)
-        ys = np.random.uniform(-self.shift, self.shift)
-        return x + xs, y + ys
-
-    def horizontal_flip(self, batch):
-        return np.flip(batch, 3)
-
-    def __getitem__(self, index):
-        indices = self.indices[index * self.batch_size:(index + 1) * self.batch_size]
-        vids = np.array(self.vids[indices])
-        #x, y = np.meshgrid(range(vids.shape[2]), range(vids.shape[3]))
-        x, y = np.meshgrid(np.arange(32)*0.75, np.arange(32)*0.75)
-        if self.crop:
-            x, y = self.random_zoom(vids, x, y)
-        if self.angle:
-            x, y = self.random_rotate(vids, x, y)
-        if self.shift:
-            x, y = self.random_translate(vids, x, y)
-        if self.flip and np.random.random() < 0.5:
-            vids = self.horizontal_flip(vids)
-        x = np.clip(x, 0, vids.shape[2]-1).astype(np.int)
-        y = np.clip(y, 0, vids.shape[3]-1).astype(np.int)
-        vids = vids[:,:,x,y].transpose(0,1,3,2,4)
-        if self.mvm is not None:
-            out = [vids, self.mvm[indices]], self.labels[indices]
-        else:
-            out = vids, self.labels[indices]
-        return out
-    
-    def on_epoch_end(self):
-        if self.shuffle:
-            np.random.shuffle(self.indices)
-
-epochs = 100
-batch_size = 32
-learning_rate = 0.001
-
-model.compile(loss='categorical_crossentropy', optimizer = Adam(lr = learning_rate), metrics=["accuracy"]) 
-print(model.summary())
-            
-train_data = DataGenerator(X_train, None, y_train, batch_size, False, 0, 0, 0)
-val_data = DataGenerator(X_val, None, y_val, batch_size)
-test_data = DataGenerator(X_test, None, y_test, batch_size)
-
-# create log dir
-if not os.path.exists("./logs/I3D"):
-    os.makedirs("./logs/I3D")
-
-current_time = str(datetime.datetime.now())
-
-# csv logs based on the time
-csv_logger = CSVLogger('./logs/I3D/log_' + current_time + '.csv', append=True, separator=';')
-
-# settings for reducing the learning rate
-reduce_lr = ReduceLROnPlateau(monitor = 'val_accuracy', factor = 0.5, patience = 3, min_lr = 0.00001, verbose = 1)
-
-# save the model at the best epoch
-checkpointer = ModelCheckpoint(filepath='./logs/I3D/best_model_' + current_time + '.hdf5', verbose=1, save_best_only = True, monitor = 'val_accuracy', mode = 'max')
-
-# Training the model on the training set, with early stopping using the validation set
-callbacks = [EarlyStopping(patience = 10), reduce_lr, csv_logger, checkpointer]
-
-history = model.fit(train_data,
-          epochs = epochs,
-          validation_data = val_data,
-          callbacks = callbacks)
-
-# plot training history
-# two plots
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize = (12,12))
-
-fig.patch.set_facecolor('white')
-
-ax1.plot(history.history['accuracy'])
-ax1.plot(history.history['val_accuracy'])
-ax1.set_title('model accuracy')
-ax1.set_ylabel('accuracy')
-ax1.set_xlabel('epoch')
-ax1.legend(['train', 'val'], loc='upper left')
-
-ax2.plot(history.history['loss'])
-ax2.plot(history.history['val_loss'])
-ax2.set_title('model loss')
-ax2.set_ylabel('loss')
-ax2.set_xlabel('epoch')
-ax2.legend(['train', 'val'], loc='upper left')
-
-fig.savefig('./logs/I3D/plot' + current_time + '.svg', format = 'svg')
-
-model.load_weights('./logs/I3D/best_model_' + current_time + '.hdf5')
-
-# evalutate accuracy on hold out set
-eval_metrics = model.evaluate(test_data, verbose = 0)
-for idx, metric in enumerate(model.metrics_names):
-    if metric == 'accuracy':
-        print(metric + ' on hold out set:', round(100 * eval_metrics[idx], 1), "%", sep = "")
-
-# Evaluating the final model on the test set
-y_pred = np.argmax(model.predict(X_test), axis = 1)
-y_test = np.argmax(y_test, axis = 1)
-print(classification_report(y_test, y_pred))
-print(confusion_matrix(y_test, y_pred))
-

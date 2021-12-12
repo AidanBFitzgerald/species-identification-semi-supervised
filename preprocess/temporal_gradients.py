@@ -20,9 +20,24 @@ import torch
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 import os
+import cv2 as cv
 
 VALIDATION_NUM = 1500
 TEST_NUM = 1500
+
+
+def dense_optical_flow(frame, prev_gray, mask):
+    """
+    Returns optical flow for given thermal video frame
+    """
+    frame = frame.astype("float32").transpose(1,2,0)
+    gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+    flow = cv.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    magnitude, angle = cv.cartToPolar(flow[..., 0], flow[..., 1])
+    mask[..., 0] = angle * 180 / np.pi / 2
+    mask[..., 2] = cv.normalize(magnitude, None, 0, 255, cv.NORM_MINMAX)
+    rgb = cv.cvtColor(mask, cv.COLOR_HSV2BGR)
+    return rgb, gray, mask
 
 
 def get_best_index(vid):
@@ -72,6 +87,12 @@ def normalize(frame):
     frame[2] = np.clip(frame[2] / 400, 0, 1)
     return frame
 
+def normalize_optical(optical_flow, min, max):
+    """
+    Min-max normalizes optical flow given min and max values
+    """
+    return ((optical_flow - min)/(max - min))
+
 
 def temporal_gradient(frame_current, frame_next):
     """
@@ -92,6 +113,10 @@ def main(input_file, output_dir):
     )  # np.float16 saves storage space
 
     clips_movement = np.zeros(
+        [10664, 45, 3, 24, 24], dtype=np.float16
+    )  # np.float16 saves storage space
+
+    clips_optical = np.zeros(
         [10664, 45, 3, 24, 24], dtype=np.float16
     )  # np.float16 saves storage space
 
@@ -123,30 +148,38 @@ def main(input_file, output_dir):
                     frame = normalize(frame)  # Normalizes each channel
                     clips[processed, f] = frame
 
-                # Get temporal gradient from each frame
-                for f in range(44):
+                # get gray of first frame for optical flow
+                frame = clips[processed, 0].astype("float32").transpose(1,2,0)
+                mask = np.zeros_like(frame)
+                mask[..., 1] = 255
+                prev_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+                optical_flow, prev_gray, mask = dense_optical_flow(clips[processed,0], prev_gray, mask)
+                clips_optical[processed,0] = optical_flow.transpose(2,0,1)
+                # Get temporal gradient and optical flow from each frame
+                for f in range(1,45):
                     current_frame = clips[processed, f]
-                    next_frame = clips[processed, f + 1]
-                    movement = temporal_gradient(current_frame, next_frame)
+                    prev_frame = clips[processed, f - 1]
+                    optical_flow, prev_gray, mask = dense_optical_flow(current_frame, prev_gray, mask)
+                    # set optical_flow to same format as other frames
+                    optical_flow = optical_flow.transpose(2,0,1)
+                    clips_optical[processed, f] = optical_flow
+                    movement = temporal_gradient(current_frame, prev_frame)
                     clips_movement[processed, f] = movement
 
-                # Get temporal gradient from last frame
-                current_frame = clips[processed, 44]
-                try:
-                    next_frame = np.array(vid[str(45 + ind)], dtype=np.float16)[
-                                 :2
-                                 ]  # Read a single frame
-                    next_frame = np.concatenate(
-                        [np.expand_dims(next_frame[0], 0), next_frame], 0
-                    )  # The desired 3 channels
-                    next_frame = make24x24(next_frame)  # Interpolate the frame
-                    next_frame = normalize(next_frame)  # Normalizes each channel
-                    movement = temporal_gradient(current_frame, next_frame)
-                    clips_movement[processed, 44] = movement
-                except:
-                    # Use final frame movement if next frame is missing
-                    clips_movement[processed, 44] = clips_movement[processed, 43]
-                    clips_movement = np.flip(clips_movement, 3)
+                # Normalize optical flow across clip
+                max = np.nanmax(clips_optical[processed])
+                min = np.nanmin(clips_optical[processed])
+
+                if np.any(np.isnan(clips_optical[processed])):
+                    clips_optical[processed] = np.nan_to_num(clips_optical[processed])
+                for f in range(45):
+                    clips_optical[processed,f] = normalize_optical(clips_optical[processed,f], min, max)
+
+                # Get temporal gradient from first frame
+                current_frame = clips[processed, 0]
+                prev_frame = clips[processed, 0]
+                movement = temporal_gradient(current_frame, prev_frame)
+                clips_movement[processed, 0] = movement
 
                 processed += 1
                 if processed % 100 == 0:
@@ -156,7 +189,9 @@ def main(input_file, output_dir):
     labels = LabelEncoder().fit_transform(labels_raw)
 
     labels_raw = np.array(labels_raw)
+    labels_raw_optical = labels_raw
     labels_raw_movement = labels_raw
+    labels_optical = labels
     labels_movement = labels
 
     # We extract the training, test and validation sets, with a fixed random seed for reproducibility and stratification
@@ -177,6 +212,26 @@ def main(input_file, output_dir):
         test_labels_raw,
     ) = train_test_split(
         clips, labels, labels_raw, test_size=TEST_NUM, random_state=123, stratify=labels
+    )
+
+    clips_optical, val_vids_optical, labels_optical, val_labels_optical, labels_raw_optical, val_labels_raw_optical = train_test_split(
+        clips_optical,
+        labels_optical,
+        labels_raw_optical,
+        test_size=VALIDATION_NUM,
+        random_state=123,
+        stratify=labels_optical,
+    )
+
+    (
+    train_vids_optical,
+    test_vids_optical,
+    train_labels_optical,
+    test_labels_optical,
+    train_labels_raw_optical,
+    test_labels_raw_optical,
+    ) = train_test_split(
+        clips_optical, labels_optical, labels_raw_optical, test_size=TEST_NUM, random_state=123, stratify=labels_optical
     )
 
     clips_movement, val_vids_movement, labels_movement, val_labels_movement, labels_raw_movement, val_labels_raw_movement = train_test_split(
@@ -212,6 +267,9 @@ def main(input_file, output_dir):
     np.save(f"{output_dir}/training-labels_raw", train_labels_raw)
     np.save(f"{output_dir}/validation-labels_raw", val_labels_raw)
     np.save(f"{output_dir}/test-labels_raw", test_labels_raw)
+    np.save(f"{output_dir}/training-optical-flow", train_vids_optical)
+    np.save(f"{output_dir}/validation-optical-flow", val_vids_optical)
+    np.save(f"{output_dir}/test-optical-flow", test_vids_optical)
     np.save(f"{output_dir}/training-temporal-gradients", train_vids_movement)
     np.save(f"{output_dir}/validation-temporal-gradients", val_vids_movement)
     np.save(f"{output_dir}/test-temporal-gradients", test_vids_movement)
